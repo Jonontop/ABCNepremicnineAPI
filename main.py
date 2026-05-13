@@ -1,6 +1,29 @@
 import requests
 from bs4 import BeautifulSoup
 import json
+import re
+
+def clean_price(price_text):
+    if not price_text:
+        return 0
+    # Obdrži samo številke
+    numeric_price = ''.join(filter(str.isdigit, price_text))
+    return int(numeric_price) if numeric_price else 0
+
+def clean_area(area_text):
+    if not area_text:
+        return 0.0
+    
+    # 1. Zamenjamo vejico s piko za decimalna števila
+    area_text = area_text.replace(',', '.')
+    
+    # 2. Poiščemo samo številke in decimalno piko
+    # Ta regex najde nize kot so "71.30"
+    match = re.search(r"[-+]?\d*\.\d+|\d+", area_text)
+    
+    if match:
+        return float(match.group())
+    return 0.0
 
 def scrape_abc_nepremicnine(limit=5, buy=True, type="flat"):
     base_url = "https://abc-nepremicnine.si"
@@ -47,20 +70,23 @@ def scrape_abc_nepremicnine(limit=5, buy=True, type="flat"):
 
             # --- Price ---
             price_tag = tag.find('span', class_='oglasCena').strong if tag else None
-            price = price_tag.get_text(strip=True) if price_tag else "N/A"
+            price = clean_price(price_tag.get_text(strip=True) if price_tag else "N/A")
 
             # --- Location & Description ---
             loc_tag = item.find('div', class_='prop-title')
             location_str = loc_tag.h1.get_text(strip=True) if loc_tag else "N/A"
 
             area_tag = tag.find_all('li')[1].find('span', class_="qty") if tag and tag.find_all('li') else None
-            area = area_tag.get_text(strip=True) if area_tag else "N/A"
+            area = clean_area(area_tag.get_text(strip=True) if area_tag else "N/A")
 
             land_desc = loc_tag.h3.get_text(strip=True) if loc_tag and loc_tag.h3 else "N/A"
 
             # --- Image ---
             img_tag = item.find("div", class_="overlay")['style'][22:-2] if item.find("div", class_="overlay") and 'style' in item.find("div", class_="overlay").attrs else ""
             img_src = "https:" + img_tag if img_tag else ""
+
+            # --- Link ---
+            link = item.find('div', class_="overlayw").a['href'] if item.find('div', class_="overlayw") and item.find('div', class_="overlayw").a else ""
 
 
 
@@ -72,7 +98,7 @@ def scrape_abc_nepremicnine(limit=5, buy=True, type="flat"):
                 "location": location_str,
                 "area": area,
                 "features": features_arr,
-                #"link": base_url + item['href'],
+                "link": base_url + link if link else "",
                 "image": img_src
             })
 
